@@ -8,6 +8,5 @@ COPY backend/ .
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8080
 
-CMD ["gunicorn", "-w", "3", "-b", "0.0.0.0:${PORT}", "app:app"]
+CMD exec gunicorn -w 3 -b 0.0.0.0:${PORT:-8080} app:app
