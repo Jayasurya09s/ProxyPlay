@@ -3,6 +3,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
 from routes.auth import auth_bp
+from routes.video import video_bp
 
 load_dotenv()
 
@@ -13,10 +14,14 @@ client = MongoClient(MONGO_URI)
 db = client["video_app"]
 
 app.register_blueprint(auth_bp, url_prefix="/auth")
-
+app.register_blueprint(video_bp)
 @app.route("/")
 def home():
     return jsonify({"status": "Backend running 🚀"})
+
+
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
