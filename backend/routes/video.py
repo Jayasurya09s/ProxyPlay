@@ -1,4 +1,6 @@
 from flask import Blueprint, jsonify, request
+import logging
+import datetime
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
@@ -13,6 +15,7 @@ video_bp = Blueprint("video", __name__)
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["video_app"]
 videos = db["videos"]
+watch_events = db["watch_events"]
 
 @video_bp.route("/video", methods=["POST"])
 def add_video():
@@ -45,6 +48,7 @@ def dashboard():
             "playback_token": generate_playback_token(v["_id"])
         })
 
+    logging.info("Dashboard requested")
     return jsonify(response)
 
 
@@ -62,7 +66,24 @@ def stream(video_id):
         video = videos.find_one({"_id": ObjectId(video_id)})
 
         embed_url = f"https://www.youtube.com/embed/{video['youtube_id']}"
+        logging.info(f"Stream requested: video_id={video_id}")
         return jsonify({"stream_url": embed_url})
 
-    except:
+    except Exception as e:
+        logging.exception("Stream error")
         return jsonify({"error": "Invalid or expired playback token"}), 401
+
+@video_bp.route("/video/<video_id>/watch", methods=["POST"])
+@jwt_required
+def watch(video_id):
+    try:
+        watch_events.insert_one({
+            "user_id": ObjectId(request.user_id),
+            "video_id": ObjectId(video_id),
+            "timestamp": datetime.datetime.utcnow()
+        })
+        logging.info(f"Watch recorded: user_id={request.user_id}, video_id={video_id}")
+        return jsonify({"message": "Watch recorded"}), 201
+    except Exception as e:
+        logging.exception("Watch record error")
+        return jsonify({"error": "Failed to record watch"}), 500

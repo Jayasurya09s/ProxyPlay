@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
+import logging
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
 import bcrypt
 from utils.jwt_helper import generate_token, decode_token
 from bson.objectid import ObjectId
+from utils.auth_middleware import jwt_required
 
 load_dotenv()
 
@@ -44,16 +46,28 @@ def login():
     data = request.json
     email = data.get("email")
     password = data.get("password")
+    logging.info(f"Login attempt: email={email}")
 
     user = users.find_one({"email": email})
     if not user:
+        logging.warning(f"Login failed: user not found for email={email}")
         return jsonify({"error": "Invalid credentials"}), 401
 
     if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"]):
+        logging.warning(f"Login failed: invalid password for email={email}")
         return jsonify({"error": "Invalid credentials"}), 401
 
     token = generate_token(user["_id"])
+    logging.info(f"Login success: email={email}")
     return jsonify({"token": token})
+
+# LOGOUT (mock)
+@auth_bp.route("/logout", methods=["POST"])
+@jwt_required
+def logout():
+    # Stateless JWT: client should discard token; server acknowledges
+    logging.info("Logout requested")
+    return jsonify({"message": "Logged out"})
 
 # GET CURRENT USER
 @auth_bp.route("/me", methods=["GET"])

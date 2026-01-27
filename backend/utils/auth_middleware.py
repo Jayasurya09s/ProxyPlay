@@ -6,6 +6,10 @@ from bson.objectid import ObjectId
 def jwt_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        # Allow CORS preflight to pass through without auth
+        if request.method == "OPTIONS":
+            return f(*args, **kwargs)
+
         auth_header = request.headers.get("Authorization")
 
         if not auth_header:
