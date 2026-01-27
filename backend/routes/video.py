@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 from utils.video_token import generate_playback_token, decode_playback_token
 from bson.objectid import ObjectId
+from utils.auth_middleware import jwt_required
 
 load_dotenv()
 
@@ -30,6 +31,7 @@ def add_video():
     return jsonify({"message": "Video added successfully"}), 201
 
 @video_bp.route("/dashboard", methods=["GET"])
+@jwt_required
 def dashboard():
     video_list = videos.find({"is_active": True}).limit(2)
 
