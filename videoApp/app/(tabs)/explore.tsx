@@ -31,6 +31,12 @@ export default function Settings() {
         <View style={styles.row}><Text style={styles.label}>Name</Text><Text style={styles.value}>{user.name}</Text></View>
         <View style={styles.row}><Text style={styles.label}>Email</Text><Text style={styles.value}>{user.email}</Text></View>
 
+        <TouchableOpacity onPress={() => router.push("/admin")} style={styles.adminButton}>
+          <LinearGradient colors={[Colors.neonPurple, Colors.neonCyan]} style={styles.buttonGradient}>
+            <Text style={styles.buttonText}>🔑 Admin: Add Video</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={logout} style={styles.logoutButton}>
           <LinearGradient colors={[Colors.neonMagenta, Colors.neonCyan]} style={styles.buttonGradient}>
             <Text style={styles.logoutText}>Logout</Text>
@@ -76,10 +82,20 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: "600",
   },
-  logoutButton: {
+  adminButton: {
     borderRadius: 12,
     overflow: "hidden",
     marginTop: Spacing.lg,
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  logoutButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: Spacing.sm,
   },
   buttonGradient: {
     paddingVertical: Spacing.sm + 4,

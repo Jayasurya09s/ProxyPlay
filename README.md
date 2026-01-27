@@ -4,6 +4,16 @@ A React Native (Expo) mobile app backed by a Flask API with MongoDB. The mobile 
 
 **Live Demo:** https://proxyplay.onrender.com (Backend deployed on Render)
 
+## 📱 Download Android App
+
+**🤖 Install on Android:**
+[Download APK](https://expo.dev/accounts/jayanthmidde/projects/videoApp/builds/2936312a-2b32-4e65-9a6f-f441d6a37296)
+
+Or scan this QR code:
+```
+https://expo.dev/accounts/jayanthmidde/projects/videoApp/builds/2936312a-2b32-4e65-9a6f-f441d6a37296
+```
+
 ## System Architecture
 
 ```mermaid
@@ -110,7 +120,19 @@ Select platform (web, Android, iOS) in Expo menu.
 
 4. Settings
 - Shows user name and email.
+- **Admin: Add Video** button (opens admin panel).
 - Logout button clears JWT.
+
+5. Admin Panel (Mobile)
+- Accessible from Settings → "🔑 Admin: Add Video"
+- Form fields:
+  - Admin Key (required, secure entry)
+  - Video Title
+  - Description
+  - YouTube Video ID (e.g., `dQw4w9WgXcQ`)
+  - Thumbnail URL (e.g., `https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg`)
+- Submit calls `/video` with `X-Admin-Key` header
+- Success: New video appears in dashboard after refresh
 
 ## API Reference
 
@@ -273,7 +295,7 @@ curl http://localhost:5000/dashboard?page=1&limit=10 \
 # Test admin endpoint (add video)
 curl -X POST http://localhost:5000/video \
   -H "Content-Type: application/json" \
-  -H "X-Admin-Key: proxyplay_admin_2026" \
+  -H "X-Admin-Key: your-admin-key-here" \
   -d '{
     "title":"Sample Video",
     "description":"A test video",
@@ -304,6 +326,23 @@ curl -X POST http://localhost:5000/auth/refresh \
 5. **Player:** Tap a video to play
 6. **Settings:** View profile, test logout
 7. **Token Refresh:** Wait for access token to expire (~1h) → next API call auto-refreshes silently
+
+### Admin: Add Videos from Mobile
+1. Open the app and login
+2. Go to **Settings** (bottom tab)
+3. Tap **🔑 Admin: Add Video**
+4. Fill in the form:
+   - **Admin Key:** Your secret key from `.env` (e.g., `proxyplay_admin_2026`)
+   - **Video Title:** e.g., "Introduction to React"
+   - **Description:** e.g., "Learn React basics"
+   - **YouTube Video ID:** Extract from URL (e.g., `dQw4w9WgXcQ` from `youtube.com/watch?v=dQw4w9WgXcQ`)
+   - **Thumbnail URL:** Usually `https://i.ytimg.com/vi/<VIDEO_ID>/maxresdefault.jpg`
+5. Tap **Add Video**
+6. On success, go back to Dashboard → Pull to refresh → New video appears
+
+**Finding YouTube Video ID:**
+- From URL `https://www.youtube.com/watch?v=dQw4w9WgXcQ` → ID is `dQw4w9WgXcQ`
+- Thumbnail URL: `https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg`
 
 ## Troubleshooting
 

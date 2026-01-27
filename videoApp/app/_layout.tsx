@@ -25,7 +25,10 @@ export default function RootLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       {isLoggedIn ? (
-        <Stack.Screen name="(tabs)" />
+        <>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="admin" options={{ presentation: "modal" }} />
+        </>
       ) : (
         <>
           <Stack.Screen name="login" />
