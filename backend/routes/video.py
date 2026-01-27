@@ -19,6 +19,11 @@ watch_events = db["watch_events"]
 
 @video_bp.route("/video", methods=["POST"])
 def add_video():
+    # Admin endpoint: use env variable for admin secret
+    admin_key = request.headers.get("X-Admin-Key")
+    if admin_key != os.getenv("ADMIN_KEY"):
+        return jsonify({"error": "Unauthorized"}), 401
+    
     data = request.json
 
     video = {
@@ -29,14 +34,30 @@ def add_video():
         "is_active": data.get("is_active", True)
     }
 
-    videos.insert_one(video)
+    result = videos.insert_one(video)
+    logging.info(f"Video added: id={result.inserted_id}, title={video.get('title')}")
 
-    return jsonify({"message": "Video added successfully"}), 201
+    return jsonify({
+        "message": "Video added successfully",
+        "id": str(result.inserted_id)
+    }), 201
 
 @video_bp.route("/dashboard", methods=["GET"])
 @jwt_required
 def dashboard():
-    video_list = videos.find({"is_active": True}).limit(2)
+    # Get pagination params from query string
+    page = request.args.get("page", 1, type=int)
+    limit = request.args.get("limit", 10, type=int)
+    
+    # Ensure valid ranges
+    page = max(page, 1)
+    limit = min(max(limit, 1), 100)  # Max 100 per page
+    
+    skip = (page - 1) * limit
+    
+    # Get total count and paginated videos
+    total_count = videos.count_documents({"is_active": True})
+    video_list = videos.find({"is_active": True}).skip(skip).limit(limit)
 
     response = []
     for v in video_list:
@@ -48,8 +69,16 @@ def dashboard():
             "playback_token": generate_playback_token(v["_id"])
         })
 
-    logging.info("Dashboard requested")
-    return jsonify(response)
+    logging.info(f"Dashboard requested: page={page}, limit={limit}, total={total_count}")
+    return jsonify({
+        "videos": response,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total_count,
+            "pages": (total_count + limit - 1) // limit
+        }
+    })
 
 
 @video_bp.route("/video/<video_id>/stream", methods=["GET"])

@@ -1,19 +1,32 @@
 # API-First Video App
 
-This repository contains a React Native (Expo) mobile app backed by a Flask API with MongoDB. The mobile app is designed as a thin client — it calls APIs, stores a JWT securely, renders server-provided data, and sends user actions. All business logic lives on the backend.
+A React Native (Expo) mobile app backed by a Flask API with MongoDB. The mobile app is a thin client — it calls APIs, stores JWT securely, renders server-provided data, and sends user actions. All business logic and security lives on the backend.
+
+**Live Demo:** https://proxyplay.onrender.com (Backend deployed on Render)
 
 ## System Architecture
 
 ```mermaid
 graph TD
-  RN[React Native App (Expo)] --> API[Flask API]
-  API --> DB[MongoDB]
-  API --> YT[YouTube (hidden behind backend logic)]
-  style YT fill:#fff,stroke:#333,stroke-dasharray: 5 5
+  RN[React Native App<br/>Expo] -->|JWT Auth| API[Flask API<br/>Gunicorn]
+  API -->|Query/Store| DB[MongoDB<br/>Atlas]
+  API -->|Fetch| YT[YouTube<br/>Video Data]
+  RN -->|Refresh Token| API
+  style API fill:#4a90e2,stroke:#333,color:#fff
+  style RN fill:#61dafb,stroke:#333,color:#000
+  style DB fill:#13aa52,stroke:#333,color:#fff
+  style YT fill:#ff0000,stroke:#333,color:#fff
 ```
 
-- The app never directly uses raw YouTube links.
-- The backend provides an embed-safe stream endpoint protected by a short-lived playback token.
+**Key Features:**
+- ✅ JWT authentication with 1-hour access tokens + 30-day refresh tokens
+- ✅ Rate limiting on login (5 attempts/min per IP)
+- ✅ Auto-token refresh on 401 (transparent to user)
+- ✅ Pagination with infinite scroll (10 videos/page)
+- ✅ Admin API key protection for video management
+- ✅ YouTube stream abstraction with short-lived playback tokens
+- ✅ CORS enabled for mobile/web access
+- ✅ Production-ready deployment (Gunicorn + Docker)
 
 ## Repository Structure
 - Backend: [backend/](backend)
@@ -29,47 +42,52 @@ graph TD
   - Settings (placeholder): [videoApp/app/(tabs)/explore.tsx](videoApp/app/(tabs)/explore.tsx)
   - API client: [videoApp/src/services/api.ts](videoApp/src/services/api.ts)
 
-## Running the Backend (Windows)
+## Local Development (Windows)
+
+### Backend Setup
 
 Prerequisites:
-- Python 3.11+
-- MongoDB running locally or remotely
-- Configure environment variables in `.env`
+- Python 3.13+
+- MongoDB (local or Atlas)
 
-Setup:
 ```powershell
 cd C:\Users\jayan\Desktop\api-first-video-app\backend
 python -m venv venv
 venv\Scripts\Activate
 pip install -r requirements.txt
-# Copy .env.example to .env and set values
-# MONGO_URI=mongodb://localhost:27017
-# SECRET_KEY=your_secret_key
-python app.py
-```
-- The server runs on `http://127.0.0.1:5000` and your LAN IP (e.g., `http://192.168.1.67:5000`).
-- For physical devices, ensure Windows Firewall allows port 5000:
-```powershell
-New-NetFirewallRule -DisplayName "Flask 5000" -Direction Inbound -LocalPort 5000 -Protocol TCP -Action Allow
 ```
 
-## Running the Frontend (Windows)
+Configure `backend/.env`:
+```
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?appName=<app>
+SECRET_KEY=your-secret-key-here
+ADMIN_KEY=your-admin-key-here
+```
+
+Run:
+```powershell
+python app.py
+# Server: http://localhost:5000 (local) or http://<your-lan-ip>:5000 (device)
+```
+
+### Frontend Setup
 
 Prerequisites:
 - Node.js 18+
+- Expo CLI
 
-Setup:
 ```powershell
 cd C:\Users\jayan\Desktop\api-first-video-app\videoApp
 npm install
-npm start -- --clear
+npm start
 ```
-Optional environment override (device or explicit control):
-- Create `videoApp/.env`:
+
+Create `videoApp/.env` for local testing:
 ```
-EXPO_PUBLIC_API_URL=http://192.168.1.67:5000
+EXPO_PUBLIC_API_URL=http://<your-lan-ip>:5000
 ```
-Restart Expo after setting this.
+
+Select platform (web, Android, iOS) in Expo menu.
 
 ## App Screens & Behavior
 
@@ -99,27 +117,36 @@ Restart Expo after setting this.
 ### Auth Endpoints
 - POST `/auth/signup`
   - Body: `{ name, email, password }`
-  - Returns: `{ token }`
+  - Returns: `{ access_token, refresh_token }`
 - POST `/auth/login`
   - Body: `{ email, password }`
-  - Returns: `{ token }`
+  - Returns: `{ access_token, refresh_token }`
+  - **Rate Limited:** 5 attempts per minute per IP (returns 429 on limit)
+- POST `/auth/refresh`
+  - Body: `{ refresh_token }`
+  - Returns: `{ access_token }` (new 1-hour token)
 - GET `/auth/me`
-  - Header: `Authorization: Bearer <token>`
+  - Header: `Authorization: Bearer <access_token>`
   - Returns: `{ name, email }`
 - POST `/auth/logout`
-  - Mock or invalidate token.
+  - Header: `Authorization: Bearer <access_token>`
+  - Invalidates all refresh tokens for the user
 
 ### Video Endpoints
-- GET `/dashboard`
-  - Header: `Authorization: Bearer <token>`
-  - Returns: `[{ id, title, description, thumbnail_url, playback_token }]` (2 items only)
+- GET `/dashboard?page=1&limit=10`
+  - Header: `Authorization: Bearer <access_token>`
+  - Returns: `{ videos: [...], pagination: { page, limit, total, pages } }`
+  - Supports infinite scroll with pagination
+- POST `/video` (Admin only)
+  - Header: `X-Admin-Key: <admin_key>`
+  - Body: `{ title, description, youtube_id, thumbnail_url, is_active }`
+  - Returns: `{ message, id }`
 - GET `/video/<id>/stream?token=<playback_token>`
-  - Validates the signed playback token and returns `{ stream_url }` (embed-safe URL).
-
-### YouTube Abstraction
-- Server returns a short-lived `playback_token` per video in `/dashboard`.
-- App requests `/video/<id>/stream?token=...`.
-- App renders the returned `stream_url` via `WebView` without exposing raw YouTube URLs.
+  - Validates short-lived playback token
+  - Returns: `{ stream_url }` (safe YouTube embed URL)
+- POST `/video/<id>/watch`
+  - Header: `Authorization: Bearer <access_token>`
+  - Logs video watch event for analytics
 
 ## Data Models
 
@@ -148,48 +175,159 @@ Video:
 
 ## Implementation Notes
 
-- JWT: [backend/utils/jwt_helper.py](backend/utils/jwt_helper.py) (`HS256`, 1-hour expiry).
-- Playback Token: [backend/utils/video_token.py](backend/utils/video_token.py) (short-lived, video-bound).
-- Auth Middleware: [backend/utils/auth_middleware.py](backend/utils/auth_middleware.py) guards protected routes; allows CORS preflight.
-- Dashboard returns only active videos: [backend/routes/video.py](backend/routes/video.py).
-- Frontend axios base URL is platform-aware: [videoApp/src/services/api.ts](videoApp/src/services/api.ts).
-  - Uses `EXPO_PUBLIC_API_URL` if set.
-  - Web uses current hostname.
-  - Native uses Expo host (maps Android emulator `localhost` → `10.0.2.2`).
+### Security
+- **JWT Auth:** HS256, 1-hour expiry for access tokens, 30-day expiry for refresh tokens
+- **Refresh Token Storage:** Stored in MongoDB `refresh_tokens` collection; invalidated on logout
+- **Rate Limiting:** Login endpoint limited to 5 attempts/minute per IP
+- **Playback Tokens:** Short-lived (5 min), video-bound, prevents raw YouTube URL exposure
+- **Admin API Key:** Required for `/video` POST (video management)
 
-## Quick Test (cURL)
+### Architecture
+- **Backend:** Flask + Flask-CORS + PyJWT + Gunicorn (production server)
+- **Frontend:** React Native (Expo) + Axios + AsyncStorage
+- **Database:** MongoDB Atlas (cloud)
+- **Deployment:** Docker + Render (auto-scaling, free tier available)
 
-```bash
-# Signup
-curl -X POST http://127.0.0.1:5000/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Test User","email":"test@example.com","password":"secret"}'
+### Key Files
+- [backend/app.py](backend/app.py) — Flask app, CORS, logging
+- [backend/routes/auth.py](backend/routes/auth.py) — Auth, rate limiting, token refresh
+- [backend/routes/video.py](backend/routes/video.py) — Video management, pagination, stream abstraction
+- [backend/utils/jwt_helper.py](backend/utils/jwt_helper.py) — Access & refresh token generation
+- [backend/utils/auth_middleware.py](backend/utils/auth_middleware.py) — JWT validation, CORS preflight bypass
+- [backend/utils/video_token.py](backend/utils/video_token.py) — Playback token generation
+- [videoApp/src/services/api.ts](videoApp/src/services/api.ts) — Axios with auto-token refresh and platform-aware baseURL
+- [videoApp/app/_layout.tsx](videoApp/app/_layout.tsx) — Navigation & auth check
+- [videoApp/app/login.tsx](videoApp/app/login.tsx) — Login screen with validation
+- [videoApp/app/signup.tsx](videoApp/app/signup.tsx) — Signup screen
+- [videoApp/app/(tabs)/index.tsx](videoApp/app/(tabs)/index.tsx) — Dashboard with pagination & infinite scroll
+- [videoApp/constants/theme.ts](videoApp/constants/theme.ts) — Neon theme & colors
 
-# Login
-curl -X POST http://127.0.0.1:5000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"secret"}'
-# => save token
+## Deployment (Render)
 
-# Me
-curl http://127.0.0.1:5000/auth/me -H "Authorization: Bearer <token>"
-
-# Dashboard
-curl http://127.0.0.1:5000/dashboard -H "Authorization: Bearer <token>"
-
-# Stream (replace <id> and <playback_token> from dashboard response)
-curl "http://127.0.0.1:5000/video/<id>/stream?token=<playback_token>"
+### 1. Push to GitHub
+```powershell
+git init
+git add -A
+git commit -m "Initial commit"
+git remote add origin https://github.com/<your-username>/api-first-video-app.git
+git branch -M main
+git push -u origin main
 ```
 
-## Optional Enhancements
-- Refresh tokens + silent renew.
-- Token expiry handling in app (auto-redirect on 401).
-- Rate limiting `/auth/login`.
-- Basic logging.
-- Deployment pipeline.
-- Pagination-ready dashboard.
-- Video watch tracking endpoint.
+### 2. Deploy on Render
 
----
+1. Go to [render.com](https://render.com) and sign in with GitHub
+2. Create New → Web Service
+3. Connect your repository
+4. Configure:
+   - **Name:** ProxyPlay
+   - **Language:** Docker (auto-detected)
+   - **Branch:** main
+   - **Region:** Oregon (US West)
+   - **Instance Type:** Free (or Starter for production)
 
-If helpful, we can add a `videoApp/.env.example` with `EXPO_PUBLIC_API_URL` to simplify device testing.
+5. Environment Variables:
+   ```
+   MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?appName=<app>
+   SECRET_KEY=your-secret-key-here
+   ADMIN_KEY=your-admin-key-here
+   ```
+
+6. Click **Deploy**. Build takes ~5 min. Your API is live at:
+   ```
+   https://proxyplay.onrender.com
+   ```
+
+### 3. Update Mobile App
+
+Create/update `videoApp/.env`:
+```
+EXPO_PUBLIC_API_URL=https://proxyplay.onrender.com
+```
+
+Restart Expo for changes to take effect.
+
+## Testing
+
+### Backend (Local)
+```bash
+# Test signup
+curl -X POST http://localhost:5000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Doe","email":"john@example.com","password":"secret123"}'
+
+# Test login
+curl -X POST http://localhost:5000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","password":"secret123"}'
+# Save the access_token and refresh_token from response
+
+# Test /auth/me
+curl http://localhost:5000/auth/me \
+  -H "Authorization: Bearer <access_token>"
+
+# Test dashboard (with pagination)
+curl http://localhost:5000/dashboard?page=1&limit=10 \
+  -H "Authorization: Bearer <access_token>"
+
+# Test admin endpoint (add video)
+curl -X POST http://localhost:5000/video \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Key: proxyplay_admin_2026" \
+  -d '{
+    "title":"Sample Video",
+    "description":"A test video",
+    "youtube_id":"dQw4w9WgXcQ",
+    "thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+    "is_active":true
+  }'
+
+# Test rate limiting (attempt login 6+ times quickly)
+for i in {1..6}; do
+  curl -X POST http://localhost:5000/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@example.com","password":"wrong"}'
+done
+# 6th request should return 429 Too Many Requests
+
+# Test token refresh
+curl -X POST http://localhost:5000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"<refresh_token>"}'
+```
+
+### Mobile App
+1. Open the app on device/emulator
+2. **Signup:** Create an account
+3. **Login:** Log in with the account
+4. **Dashboard:** Scroll through videos (infinite scroll after 10)
+5. **Player:** Tap a video to play
+6. **Settings:** View profile, test logout
+7. **Token Refresh:** Wait for access token to expire (~1h) → next API call auto-refreshes silently
+
+## Troubleshooting
+
+### Backend Issues
+| Issue | Solution |
+|-------|----------|
+| `Port 5000 already in use` | Change port in `app.py` or kill the process: `lsof -ti :5000 \| xargs kill -9` |
+| `MongoDB connection refused` | Check MongoDB is running and `MONGO_URI` is correct in `.env` |
+| `ADMIN_KEY not found` | Ensure `ADMIN_KEY=proxyplay_admin_2026` is in `backend/.env` |
+| Render deployment fails | Check logs: Render Dashboard → Logs tab; ensure env vars are set |
+
+### Frontend Issues
+| Issue | Solution |
+|-------|----------|
+| `Network Error in axios` | Verify backend is running; check `EXPO_PUBLIC_API_URL` in `.env` |
+| `Android emulator can't reach backend` | Use `10.0.2.2` instead of `localhost` (already handled in code) |
+| `401 on every request` | Clear AsyncStorage or reinstall app; check token in browser DevTools |
+| `Page won't refresh` | Restart Expo with `npm start -- --clear` |
+
+## Future Enhancements
+- Search/filter videos by title or category
+- User profiles & watch history
+- Recommendations based on watch events
+- Dark/light theme toggle
+- Offline mode with caching
+- Push notifications
+- Livestream support

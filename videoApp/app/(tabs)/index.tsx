@@ -8,25 +8,53 @@ import { Colors, Spacing, Shadows } from "../../constants/theme";
 import { StatusBar } from "expo-status-bar";
 
 export default function Dashboard() {
-  const [videos, setVideos] = useState([]);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [lastLoadedPage, setLastLoadedPage] = useState(0);
+
+  const fetchDashboard = async (pageNum: number) => {
+    try {
+      setLoading(true);
+      const res = await API.get("/dashboard", { params: { page: pageNum, limit: 10 } });
+      const { videos: newVideos, pagination } = res.data;
+      
+      // Update page first
+      setPage(pageNum);
+      setTotalPages(pagination.pages);
+      
+      // Then update videos based on page
+      if (pageNum === 1) {
+        setVideos(newVideos);
+      } else {
+        setVideos((prev) => [...prev, ...newVideos]);
+      }
+    } catch (e: any) {
+      if (e?.response?.status === 401) {
+        await AsyncStorage.removeItem("access_token");
+        await AsyncStorage.removeItem("refresh_token");
+        Alert.alert("Session expired", "Please log in again.");
+        router.replace("/login");
+      } else {
+        Alert.alert("Error", e?.message || "Failed to load dashboard");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const res = await API.get("/dashboard");
-        setVideos(res.data);
-      } catch (e: any) {
-        if (e?.response?.status === 401) {
-          await AsyncStorage.removeItem("token");
-          Alert.alert("Session expired", "Please log in again.");
-          router.replace("/login");
-        } else {
-          Alert.alert("Error", e?.message || "Failed to load dashboard");
-        }
-      }
-    };
-    fetchDashboard();
+    fetchDashboard(1);
   }, []);
+
+  const loadMore = () => {
+    // Prevent multiple calls for same page
+    if (page < totalPages && !loading && lastLoadedPage !== page) {
+      setLastLoadedPage(page);
+      fetchDashboard(page + 1);
+    }
+  };
 
   return (
     <LinearGradient colors={[Colors.background, "#0E1324"]} style={styles.container}>
@@ -36,6 +64,15 @@ export default function Dashboard() {
         data={videos}
         keyExtractor={(item: any) => item.id}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          page < totalPages && !loading ? (
+            <TouchableOpacity onPress={loadMore} style={styles.loadMore}>
+              <Text style={styles.loadMoreText}>Load More Videos</Text>
+            </TouchableOpacity>
+          ) : null
+        }
         renderItem={({ item }: any) => (
           <TouchableOpacity
             onPress={() => router.push({ pathname: "/player", params: item })}
@@ -93,5 +130,18 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 4,
     fontSize: 14,
+  },
+  loadMore: {
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  loadMoreText: {
+    color: Colors.neonCyan,
+    fontWeight: "600",
   },
 });

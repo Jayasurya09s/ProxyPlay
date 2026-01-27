@@ -18,7 +18,8 @@ export default function Settings() {
     try {
       await API.post("/auth/logout");
     } catch {}
-    await AsyncStorage.removeItem("token");
+    await AsyncStorage.removeItem("access_token");
+    await AsyncStorage.removeItem("refresh_token");
     router.replace("/login");
   };
 

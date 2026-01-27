@@ -20,7 +20,8 @@ export default function Login() {
     try {
       setLoading(true);
       const res = await API.post("/auth/login", { email, password });
-      await AsyncStorage.setItem("token", res.data.token);
+      await AsyncStorage.setItem("access_token", res.data.access_token);
+      await AsyncStorage.setItem("refresh_token", res.data.refresh_token);
       router.replace("/(tabs)");
     } catch (e: any) {
       const msg = e?.response?.data?.error || e?.message || "Login failed";

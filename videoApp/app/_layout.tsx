@@ -8,7 +8,7 @@ export default function RootLayout() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem("token").then((token) => {
+    AsyncStorage.getItem("access_token").then((token) => {
       setIsLoggedIn(!!token);
       setLoading(false);
     });
