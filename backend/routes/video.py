@@ -29,7 +29,8 @@ def add_video():
     video = {
         "title": data.get("title"),
         "description": data.get("description"),
-        "youtube_id": data.get("youtube_id"),
+        "video_url": data.get("video_url"),  # Direct video URL
+        "youtube_id": data.get("youtube_id"),  # Keep for backward compatibility
         "thumbnail_url": data.get("thumbnail_url"),
         "is_active": data.get("is_active", True)
     }
@@ -93,10 +94,20 @@ def stream(video_id):
             return jsonify({"error": "Invalid playback token"}), 403
 
         video = videos.find_one({"_id": ObjectId(video_id)})
+        
+        if not video:
+            return jsonify({"error": "Video not found"}), 404
 
-        embed_url = f"https://www.youtube.com/embed/{video['youtube_id']}"
+        # Support both direct video URLs and YouTube IDs
+        if video.get('video_url'):
+            stream_url = video['video_url']
+        elif video.get('youtube_id'):
+            stream_url = f"https://www.youtube.com/embed/{video['youtube_id']}"
+        else:
+            return jsonify({"error": "No video source available"}), 404
+            
         logging.info(f"Stream requested: video_id={video_id}")
-        return jsonify({"stream_url": embed_url})
+        return jsonify({"stream_url": stream_url})
 
     except Exception as e:
         logging.exception("Stream error")
