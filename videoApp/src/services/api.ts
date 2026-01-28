@@ -9,6 +9,12 @@ function getBaseURL(): string {
     return envUrl;
   }
 
+  // Production backend by default
+  if (__DEV__ === false) {
+    return "https://proxyplay.onrender.com";
+  }
+
+  // Development mode: use local network
   if (Platform.OS === "web") {
     const host = (typeof window !== "undefined" ? window.location.hostname : "localhost");
     return `http://${host}:5000`;
