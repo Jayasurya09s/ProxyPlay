@@ -1,4 +1,6 @@
-# API-First Video App
+**#ProxyPlay**
+
+#API-First Video App
 
 A React Native (Expo) mobile app backed by a Flask API with MongoDB. The mobile app is a thin client — it calls APIs, stores JWT securely, renders server-provided data, and sends user actions. All business logic and security lives on the backend.
 
